@@ -1,5 +1,4 @@
-<html lang="en">
-<head>
+<html lang="en"><head>
     <meta charset="UTF-8">
     <title>JJK WebGL</title>
     <style>
@@ -41,7 +40,6 @@
         #cd-fill { width: 0%; height: 100%; background: #c040ff; }
         #dash-fill { width: 0%; height: 100%; background: #4080ff; }
 
-        /* Updated Mobile Styles */
         #mobile-ui { display: none; position: fixed; inset: 0; z-index: 100; pointer-events: none; }
         .joystick-area { 
             position: absolute; bottom: 50px; left: 50px; width: 120px; height: 120px; 
@@ -63,7 +61,7 @@
         }
         #btn-purple { top: 0%; left: 50%; background: #a044ff; }
         #btn-blue   { top: 50%; left: 0%; background: #4444ff; }
-        #btn-red    { top: 50%; left: 100%; background: #ff4444; }
+        #btn-red     { top: 50%; left: 100%; background: #ff4444; }
         #btn-punch  { top: 50%; left: 50%; background: #7cf5ff; color: black; width: 75px; height: 75px; font-size: 12px; }
         #btn-void   { top: 100%; left: 50%; background: #000; }
 
@@ -75,26 +73,23 @@
 </head>
 <body>
 
-<canvas id="glcanvas"></canvas>
+<canvas id="glcanvas" width="972" height="732"></canvas>
 <div id="crosshair"></div>
 
 <div id="hud">
     <div style="font-size: 18px; color: #7cf5ff; font-weight: bold;">SATORU GOJO</div>
-    <div class="bar-bg"><div id="cd-fill"></div></div>
+    <div class="bar-bg"><div id="cd-fill" style="width: 0%;"></div></div>
     <div style="font-size: 10px; margin-top: 5px; opacity: 0.7;">DASH CD</div>
-    <div class="bar-bg"><div id="dash-fill"></div></div>
+    <div class="bar-bg"><div id="dash-fill" style="width: 0%;"></div></div>
 </div>
 
 <div id="mobile-ui">
     <div id="move-joy" class="joystick-area"><div class="knob"></div></div>
-    
     <div id="camera-touch-zone" style="position:fixed; top:0; right:0; width:50%; height:100%; pointer-events:auto; touch-action:none;"></div>
-
     <div id="mobile-nav-btns">
         <button class="nav-btn" onclick="triggerDash()">DASH</button>
         <button class="nav-btn" onclick="triggerJump()">JUMP</button>
     </div>
-
     <div id="mobile-btns">
         <button id="btn-purple" class="m-btn" onclick="shoot('purple')">PURPLE</button>
         <button id="btn-blue" class="m-btn" onclick="shoot('blue')">BLUE</button>
@@ -104,7 +99,7 @@
     </div>
 </div>
 
-<div id="hand-container">
+<div id="hand-container" style="transform: translateY(0.243515px) rotateZ(-8deg);">
     <div id="hand">
         <div class="finger f1"></div><div class="finger f2"></div>
         <div class="finger f3"></div><div class="finger f4"></div>
@@ -270,27 +265,48 @@ function triggerDash() {
     }
 }
 
+// UPDATED SHOOT FUNCTION
 function shoot(type) {
     const now = Date.now();
     if(type !== 'punch' && now - lastFire < CD) return;
     if(type !== 'punch') lastFire = now;
+    
     const speed = type === 'punch' ? 4 : 10; 
-    const fx = Math.cos(camYaw) * Math.cos(camPitch), fy = Math.sin(camPitch), fz = Math.sin(camYaw) * Math.cos(camPitch);
-    const sx = Math.cos(camYaw + Math.PI/2), sz = Math.sin(camYaw + Math.PI/2);
     
-    const handOffsetRight = 8.0;   
-    const handOffsetDown = -4.0; 
-    const handOffsetForward = 2.0;  
+    // Direction vectors
+    const fx = Math.cos(camYaw) * Math.cos(camPitch);
+    const fy = Math.sin(camPitch);
+    const fz = Math.sin(camYaw) * Math.cos(camPitch);
     
+    // Side vector (for right-hand offset)
+    const sx = Math.cos(camYaw + Math.PI/2);
+    const sz = Math.sin(camYaw + Math.PI/2);
+    
+    // positioning logic adjusted to fingertips
+    const handOffsetRight = 10.0;   
+    const handOffsetDown = -2.0; 
+    const handOffsetForward = 15.0; 
+    
+    // Calculate spawn position with pitch-based correction
     const spawnPos = [
         camPos[0] + (sx * handOffsetRight) + (fx * handOffsetForward),
-        camPos[1] + handOffsetDown + (fy * handOffsetForward),
+        camPos[1] + handOffsetDown + (fy * handOffsetForward) + (camPitch * 5),
         camPos[2] + (sz * handOffsetRight) + (fz * handOffsetForward)
     ];
-    projectiles.push({ type, pos: spawnPos, vel: [fx*speed, fy*speed, fz*speed], life: 200, scale: type === 'purple' ? 6 : 1.8 });
+
+    projectiles.push({ 
+        type, 
+        pos: spawnPos, 
+        vel: [fx*speed, fy*speed, fz*speed], 
+        life: 200, 
+        scale: type === 'purple' ? 6 : 1.8 
+    });
+
     const hand = document.getElementById('hand');
     hand.style.transform = 'rotateX(40deg) rotateZ(-8deg) translateY(10px)';
-    setTimeout(() => { hand.style.transform = 'rotateX(20deg) rotateZ(-8deg) translateY(0px)'; }, 100);
+    setTimeout(() => { 
+        hand.style.transform = 'rotateX(20deg) rotateZ(-8deg) translateY(0px)'; 
+    }, 100);
 }
 
 function setupJoy(id, target) {
@@ -313,7 +329,6 @@ function handleJoy(e, el, knob, target) {
     knob.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
 }
 
-// Camera Touch Zone Logic
 const camZone = document.getElementById('camera-touch-zone');
 camZone.addEventListener('touchstart', e => {
     const t = e.touches[0];
@@ -454,5 +469,5 @@ function render() {
 }
 requestAnimationFrame(render);
 </script>
-</body>
-</html>
+
+</body></html>

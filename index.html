@@ -1,9 +1,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>JJK WebGL</title>
+    <title>JJK WebGL - Mobile Fixed</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; touch-action: none; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; touch-action: none; user-select: none; -webkit-user-select: none; }
         canvas { display: block; position: fixed; inset: 0; }
         #hand-container {
             position: fixed; right: 10%; bottom: -10px; width: 140px; height: 220px;
@@ -58,7 +58,7 @@
             position: absolute; width: 60px; height: 60px; border-radius: 50%; 
             border: 2px solid rgba(255,255,255,0.5); color: white; font-weight: bold; 
             font-size: 10px; pointer-events: auto; transform: translate(-50%, -50%);
-            text-shadow: 1px 1px #000;
+            text-shadow: 1px 1px #000; outline: none; -webkit-tap-highlight-color: transparent;
         }
         #btn-purple { top: 0%; left: 50%; background: #a044ff; }
         #btn-blue   { top: 50%; left: 0%; background: #4444ff; }
@@ -69,7 +69,7 @@
         #mobile-nav-btns {
             position: absolute; right: 260px; bottom: 40px; display: flex; flex-direction: column; gap: 10px; pointer-events: auto;
         }
-        .nav-btn { width: 70px; height: 50px; border-radius: 10px; background: rgba(255,255,255,0.2); color: white; border: 1px solid white; }
+        .nav-btn { width: 70px; height: 50px; border-radius: 10px; background: rgba(255,255,255,0.2); color: white; border: 1px solid white; -webkit-tap-highlight-color: transparent; }
     </style>
 </head>
 <body>
@@ -88,15 +88,15 @@
     <div id="move-joy" class="joystick-area"><div class="knob"></div></div>
     <div id="camera-touch-zone" style="position:fixed; top:0; right:0; width:50%; height:100%; pointer-events:auto; touch-action:none;"></div>
     <div id="mobile-nav-btns">
-        <button class="nav-btn" onclick="triggerDash()">DASH</button>
-        <button class="nav-btn" onclick="triggerJump()">JUMP</button>
+        <button class="nav-btn" id="m-dash">DASH</button>
+        <button class="nav-btn" id="m-jump">JUMP</button>
     </div>
     <div id="mobile-btns">
-        <button id="btn-purple" class="m-btn" onclick="shoot('purple')">PURPLE</button>
-        <button id="btn-blue" class="m-btn" onclick="shoot('blue')">BLUE</button>
-        <button id="btn-red" class="m-btn" onclick="shoot('red')">RED</button>
-        <button id="btn-punch" class="m-btn" onclick="shoot('punch')">PUNCH</button>
-        <button id="btn-void" class="m-btn" onclick="triggerDomain()">VOID</button>
+        <button id="btn-purple" class="m-btn">PURPLE</button>
+        <button id="btn-blue" class="m-btn">BLUE</button>
+        <button id="btn-red" class="m-btn">RED</button>
+        <button id="btn-punch" class="m-btn">PUNCH</button>
+        <button id="btn-void" class="m-btn">VOID</button>
     </div>
 </div>
 
@@ -214,7 +214,7 @@ const sCB_R = getBuf(sphereCols.red), sCB_B = getBuf(sphereCols.blue), sCB_P = g
 let camPos = [0, 15, 500], camYaw = -Math.PI/2, camPitch = 0;
 let velY = 0, isGrounded = true, jumpCount = 0;
 let isDashing = false, dashTime = 0, lastDash = 0, dashDir = [0,0];
-let canDashAgain = true; // NEW FLAG
+let canDashAgain = true; 
 let isCastingDomain = false, domainActive = false, domainScale = 0; 
 const keys = {}, projectiles = [];
 let lastFire = 0;
@@ -246,15 +246,15 @@ function triggerJump() {
 
 function triggerDash() {
     const now = Date.now();
-    // Check if cooldown is over AND player is allowed to dash again (lifted key)
     if(now - lastDash > 500 && canDashAgain) { 
         isDashing = true; 
         dashTime = 0.15; 
         lastDash = now;
-        canDashAgain = false; // Lock dashing until key is released
+        canDashAgain = false; 
 
         let dx = 0, dz = 0;
         let moveX = 0, moveZ = 0;
+        
         if(keys['KeyW']) { moveX += Math.cos(camYaw); moveZ += Math.sin(camYaw); }
         if(keys['KeyS']) { moveX -= Math.cos(camYaw); moveZ -= Math.sin(camYaw); }
         if(keys['KeyA']) { moveX -= Math.cos(camYaw+Math.PI/2); moveZ -= Math.sin(camYaw+Math.PI/2); }
@@ -270,6 +270,8 @@ function triggerDash() {
         
         const mag = Math.sqrt(dx*dx + dz*dz);
         dashDir = [dx/mag, dz/mag];
+
+        if(isMobile) setTimeout(() => { canDashAgain = true; }, 500);
     }
 }
 
@@ -277,39 +279,24 @@ function shoot(type) {
     const now = Date.now();
     if(type !== 'punch' && now - lastFire < CD) return;
     if(type !== 'punch') lastFire = now;
-    
     const speed = type === 'punch' ? 4 : 10; 
-    
     const fx = Math.cos(camYaw) * Math.cos(camPitch);
     const fy = Math.sin(camPitch);
     const fz = Math.sin(camYaw) * Math.cos(camPitch);
-    
     const sx = Math.cos(camYaw + Math.PI/2);
     const sz = Math.sin(camYaw + Math.PI/2);
-    
     const handOffsetRight = 10.0;   
     const handOffsetDown = -2.0; 
     const handOffsetForward = 15.0; 
-    
     const spawnPos = [
         camPos[0] + (sx * handOffsetRight) + (fx * handOffsetForward),
         camPos[1] + handOffsetDown + (fy * handOffsetForward) + (camPitch * 5),
         camPos[2] + (sz * handOffsetRight) + (fz * handOffsetForward)
     ];
-
-    projectiles.push({ 
-        type, 
-        pos: spawnPos, 
-        vel: [fx*speed, fy*speed, fz*speed], 
-        life: 200, 
-        scale: type === 'purple' ? 6 : 1.8 
-    });
-
+    projectiles.push({ type, pos: spawnPos, vel: [fx*speed, fy*speed, fz*speed], life: 200, scale: type === 'purple' ? 6 : 1.8 });
     const hand = document.getElementById('hand');
     hand.style.transform = 'rotateX(40deg) rotateZ(-8deg) translateY(10px)';
-    setTimeout(() => { 
-        hand.style.transform = 'rotateX(20deg) rotateZ(-8deg) translateY(0px)'; 
-    }, 100);
+    setTimeout(() => { hand.style.transform = 'rotateX(20deg) rotateZ(-8deg) translateY(0px)'; }, 100);
 }
 
 function setupJoy(id, target) {
@@ -321,7 +308,8 @@ function setupJoy(id, target) {
 }
 function handleJoy(e, el, knob, target) {
     e.preventDefault();
-    const touch = e.touches[0];
+    const touch = [...e.touches].find(t => t.target === el || el.contains(t.target));
+    if(!touch) return;
     const rect = el.getBoundingClientRect();
     const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
     let dx = touch.clientX - cx, dy = touch.clientY - cy;
@@ -334,25 +322,29 @@ function handleJoy(e, el, knob, target) {
 
 const camZone = document.getElementById('camera-touch-zone');
 camZone.addEventListener('touchstart', e => {
-    const t = e.touches[0];
-    lastTouchX = t.clientX;
-    lastTouchY = t.clientY;
+    const t = e.touches[e.touches.length-1];
+    lastTouchX = t.clientX; lastTouchY = t.clientY;
 }, {passive: false});
-
 camZone.addEventListener('touchmove', e => {
     if (lastTouchX === null) return;
-    const t = e.touches[0];
-    const dx = t.clientX - lastTouchX;
-    const dy = t.clientY - lastTouchY;
-    camYaw += dx * 0.005;
-    camPitch = Math.max(-1.4, Math.min(1.4, camPitch - dy * 0.005));
-    lastTouchX = t.clientX;
-    lastTouchY = t.clientY;
+    const t = [...e.touches].find(touch => touch.target === camZone);
+    if(!t) return;
+    const dx = t.clientX - lastTouchX, dy = t.clientY - lastTouchY;
+    camYaw += dx * 0.005; camPitch = Math.max(-1.4, Math.min(1.4, camPitch - dy * 0.005));
+    lastTouchX = t.clientX; lastTouchY = t.clientY;
 }, {passive: false});
+camZone.addEventListener('touchend', () => { lastTouchX = null; lastTouchY = null; });
 
-camZone.addEventListener('touchend', () => {
-    lastTouchX = null;
-    lastTouchY = null;
+// MOBILE MULTI-TOUCH BUTTON FIX
+const mobileBtns = [
+    {id:'m-dash', fn:triggerDash}, {id:'m-jump', fn:triggerJump}, 
+    {id:'btn-purple', fn:()=>shoot('purple')}, {id:'btn-blue', fn:()=>shoot('blue')},
+    {id:'btn-red', fn:()=>shoot('red')}, {id:'btn-punch', fn:()=>shoot('punch')},
+    {id:'btn-void', fn:triggerDomain}
+];
+mobileBtns.forEach(b => {
+    const el = document.getElementById(b.id);
+    if(el) el.addEventListener('touchstart', (e)=>{ e.preventDefault(); b.fn(); }, {passive:false});
 });
 
 if(isMobile) { setupJoy('move-joy', joyMove); }
@@ -366,13 +358,9 @@ window.addEventListener('keydown', e => {
     if(e.key.toLowerCase()==='b') shoot('blue');
     if(e.key.toLowerCase()==='l') shoot('purple');
 });
-
 window.addEventListener('keyup', e => {
     keys[e.code] = false;
-    // RESET DASH FLAG ON RELEASE
-    if(e.code === 'ShiftLeft') {
-        canDashAgain = true;
-    }
+    if(e.code === 'ShiftLeft') canDashAgain = true;
 });
 
 canvas.addEventListener('mousedown', e => { if(document.pointerLockElement === canvas) shoot('punch'); else canvas.requestPointerLock(); });
@@ -383,21 +371,14 @@ window.addEventListener('mousemove', e => {
     }
 });
 
-/** RENDER LOOP **/
-const projM = mat4.create(), viewM = mat4.create(), mvpM = mat4.create(), modelM = mat4.create();
-let phase = 0;
-
 function render() {
     const w = window.innerWidth, h = window.innerHeight;
     if(canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
     gl.viewport(0, 0, w, h);
-    gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
-
     velY -= 0.08;
     let mx = 0, mz = 0;
-    
     if(isDashing) {
         mx = dashDir[0] * 6.0; mz = dashDir[1] * 6.0;
         dashTime -= 0.016; if(dashTime <= 0) isDashing = false;
@@ -412,26 +393,20 @@ function render() {
             if(keys['KeyD']) { mx += Math.cos(camYaw+Math.PI/2)*1.5; mz += Math.sin(camYaw+Math.PI/2)*1.5; }
         }
     }
-
     if(!checkCollision(camPos[0] + mx, camPos[1], camPos[2])) camPos[0] += mx;
     if(!checkCollision(camPos[0], camPos[1], camPos[2] + mz)) camPos[2] += mz;
-    
     camPos[1] += velY;
     if (camPos[1] <= 15) { camPos[1] = 15; velY = 0; isGrounded = true; jumpCount = 0; }
     else if(checkCollision(camPos[0], camPos[1], camPos[2])) { camPos[1] -= velY; velY = 0; }
-
     phase += 0.02;
     if(!isCastingDomain) document.getElementById('hand-container').style.transform = `translateY(${Math.sin(phase*4)*8}px) rotateZ(-8deg)`;
-
     mat4.perspective(projM, 45 * Math.PI / 180, w / h, 0.1, 5000.0);
     mat4.lookAt(viewM, camPos, [camPos[0]+Math.cos(camYaw)*Math.cos(camPitch), camPos[1]+Math.sin(camPitch), camPos[2]+Math.sin(camYaw)*Math.cos(camPitch)], [0,1,0]);
-
     if(!domainActive) {
         gl.bindBuffer(gl.ARRAY_BUFFER, wPB); gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 0, 0);
         gl.bindBuffer(gl.ARRAY_BUFFER, wCB); gl.vertexAttribPointer(aC, 4, gl.FLOAT, false, 0, 0);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wIB);
-        mat4.multiply(mvpM, projM, viewM);
-        gl.uniformMatrix4fv(uMVP, false, mvpM);
+        mat4.multiply(mvpM, projM, viewM); gl.uniformMatrix4fv(uMVP, false, mvpM);
         gl.drawElements(gl.TRIANGLES, worldIdx.length, gl.UNSIGNED_SHORT, 0);
     } else {
         if(domainScale < 1) domainScale += 0.04;
@@ -456,7 +431,6 @@ function render() {
         mat4.multiply(mvpM, projM, mat4.multiply(mat4.create(), viewM, modelM));
         gl.uniformMatrix4fv(uMVP, false, mvpM); gl.drawElements(gl.TRIANGLES, sphereIdx.length, gl.UNSIGNED_SHORT, 0);
     }
-
     gl.bindBuffer(gl.ARRAY_BUFFER, sPB); gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sIB);
     for(let i = projectiles.length - 1; i >= 0; i--) {
@@ -464,14 +438,12 @@ function render() {
         p.pos[0] += p.vel[0]; p.pos[1] += p.vel[1]; p.pos[2] += p.vel[2]; p.life--;
         if (p.life <= 0 || checkCollision(p.pos[0], p.pos[1], p.pos[2])) { projectiles.splice(i, 1); continue; }
         const coreCol = p.type==='red'?sCB_R : p.type==='blue'?sCB_B : p.type==='purple'?sCB_P : sCB_W;
-        gl.disable(gl.BLEND);
-        gl.bindBuffer(gl.ARRAY_BUFFER, coreCol); gl.vertexAttribPointer(aC, 4, gl.FLOAT, false, 0, 0);
+        gl.disable(gl.BLEND); gl.bindBuffer(gl.ARRAY_BUFFER, coreCol); gl.vertexAttribPointer(aC, 4, gl.FLOAT, false, 0, 0);
         mat4.identity(modelM); mat4.translate(modelM, modelM, p.pos);
         mat4.scale(modelM, modelM, [p.scale, p.scale, p.scale]);
         mat4.multiply(mvpM, projM, mat4.multiply(mat4.create(), viewM, modelM));
         gl.uniformMatrix4fv(uMVP, false, mvpM); gl.drawElements(gl.TRIANGLES, sphereIdx.length, gl.UNSIGNED_SHORT, 0);
     }
-
     document.getElementById('cd-fill').style.width = Math.max(0, (1 - (Date.now() - lastFire)/CD)*100) + "%";
     document.getElementById('dash-fill').style.width = Math.max(0, (1 - (Date.now() - lastDash)/500)*100) + "%";
     requestAnimationFrame(render);

@@ -1,4 +1,5 @@
-<html lang="en"><head>
+<html lang="en">
+<head>
     <meta charset="UTF-8">
     <title>JJK WebGL</title>
     <style>
@@ -40,30 +41,36 @@
         #cd-fill { width: 0%; height: 100%; background: #c040ff; }
         #dash-fill { width: 0%; height: 100%; background: #4080ff; }
 
+        /* Updated Mobile Styles */
         #mobile-ui { display: none; position: fixed; inset: 0; z-index: 100; pointer-events: none; }
         .joystick-area { 
-            position: absolute; bottom: 30px; width: 120px; height: 120px; 
+            position: absolute; bottom: 50px; left: 50px; width: 120px; height: 120px; 
             background: rgba(255,255,255,0.1); border-radius: 50%; border: 2px solid rgba(255,255,255,0.2);
             pointer-events: auto; touch-action: none;
         }
-        #move-joy { left: 30px; }
-        #look-joy { right: 30px; }
         .knob { 
             position: absolute; width: 50px; height: 50px; background: rgba(255,255,255,0.5); 
             border-radius: 50%; left: 35px; top: 35px; pointer-events: none;
         }
         #mobile-btns { 
-            position: absolute; right: 20px; bottom: 160px; display: flex; flex-direction: column; 
-            gap: 10px; pointer-events: auto; 
-        }
-        #mobile-nav-btns {
-            position: absolute; left: 160px; bottom: 30px; display: flex; gap: 15px; pointer-events: auto;
+            position: absolute; right: 40px; bottom: 40px; width: 200px; height: 200px; pointer-events: none; 
         }
         .m-btn { 
-            width: 55px; height: 55px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.5); 
-            color: white; font-weight: bold; font-size: 9px; text-shadow: 1px 1px #000;
+            position: absolute; width: 60px; height: 60px; border-radius: 50%; 
+            border: 2px solid rgba(255,255,255,0.5); color: white; font-weight: bold; 
+            font-size: 10px; pointer-events: auto; transform: translate(-50%, -50%);
+            text-shadow: 1px 1px #000;
         }
-        .nav-btn { width: 65px; height: 45px; border-radius: 10px; background: rgba(255,255,255,0.2); }
+        #btn-purple { top: 0%; left: 50%; background: #a044ff; }
+        #btn-blue   { top: 50%; left: 0%; background: #4444ff; }
+        #btn-red    { top: 50%; left: 100%; background: #ff4444; }
+        #btn-punch  { top: 50%; left: 50%; background: #7cf5ff; color: black; width: 75px; height: 75px; font-size: 12px; }
+        #btn-void   { top: 100%; left: 50%; background: #000; }
+
+        #mobile-nav-btns {
+            position: absolute; right: 260px; bottom: 40px; display: flex; flex-direction: column; gap: 10px; pointer-events: auto;
+        }
+        .nav-btn { width: 70px; height: 50px; border-radius: 10px; background: rgba(255,255,255,0.2); color: white; border: 1px solid white; }
     </style>
 </head>
 <body>
@@ -76,22 +83,24 @@
     <div class="bar-bg"><div id="cd-fill"></div></div>
     <div style="font-size: 10px; margin-top: 5px; opacity: 0.7;">DASH CD</div>
     <div class="bar-bg"><div id="dash-fill"></div></div>
-    <div style="margin-top:10px; font-size: 11px; opacity: 0.8;">F: RED | B: BLUE | L: PURPLE | R: DOMAIN | SHIFT: DASH</div>
 </div>
 
 <div id="mobile-ui">
     <div id="move-joy" class="joystick-area"><div class="knob"></div></div>
-    <div id="look-joy" class="joystick-area"><div class="knob"></div></div>
+    
+    <div id="camera-touch-zone" style="position:fixed; top:0; right:0; width:50%; height:100%; pointer-events:auto; touch-action:none;"></div>
+
     <div id="mobile-nav-btns">
-        <button class="m-btn nav-btn" onclick="triggerDash()">DASH</button>
-        <button class="m-btn nav-btn" onclick="triggerJump()">JUMP</button>
+        <button class="nav-btn" onclick="triggerDash()">DASH</button>
+        <button class="nav-btn" onclick="triggerJump()">JUMP</button>
     </div>
+
     <div id="mobile-btns">
-        <button class="m-btn" style="background: #000;" onclick="triggerDomain()">VOID</button>
-        <button class="m-btn" style="background: #a044ff;" onclick="shoot('purple')">PURPLE</button>
-        <button class="m-btn" style="background: #ff4444;" onclick="shoot('red')">RED</button>
-        <button class="m-btn" style="background: #4444ff;" onclick="shoot('blue')">BLUE</button>
-        <button class="m-btn" style="background: #7cf5ff; color:black;" onclick="shoot('punch')">PUNCH</button>
+        <button id="btn-purple" class="m-btn" onclick="shoot('purple')">PURPLE</button>
+        <button id="btn-blue" class="m-btn" onclick="shoot('blue')">BLUE</button>
+        <button id="btn-red" class="m-btn" onclick="shoot('red')">RED</button>
+        <button id="btn-punch" class="m-btn" onclick="shoot('punch')">PUNCH</button>
+        <button id="btn-void" class="m-btn" onclick="triggerDomain()">VOID</button>
     </div>
 </div>
 
@@ -214,7 +223,8 @@ const keys = {}, projectiles = [];
 let lastFire = 0;
 const CD = 800;
 
-let joyMove = {x:0, y:0}, joyLook = {x:0, y:0};
+let joyMove = {x:0, y:0};
+let lastTouchX = null, lastTouchY = null;
 
 function checkCollision(nx, ny, nz) {
     const r = 2; 
@@ -241,7 +251,6 @@ function triggerDash() {
     if(Date.now() - lastDash > 500) { 
         isDashing = true; dashTime = 0.15; lastDash = Date.now();
         let dx = 0, dz = 0;
-        
         let moveX = 0, moveZ = 0;
         if(keys['KeyW']) { moveX += Math.cos(camYaw); moveZ += Math.sin(camYaw); }
         if(keys['KeyS']) { moveX -= Math.cos(camYaw); moveZ -= Math.sin(camYaw); }
@@ -253,11 +262,8 @@ function triggerDash() {
             moveZ = Math.sin(camYaw)*-joyMove.y + Math.sin(camYaw+Math.PI/2)*joyMove.x;
         }
 
-        if(moveX === 0 && moveZ === 0) { 
-            dx = Math.cos(camYaw); dz = Math.sin(camYaw); 
-        } else {
-            dx = moveX; dz = moveZ;
-        }
+        if(moveX === 0 && moveZ === 0) { dx = Math.cos(camYaw); dz = Math.sin(camYaw); } 
+        else { dx = moveX; dz = moveZ; }
         
         const mag = Math.sqrt(dx*dx + dz*dz);
         dashDir = [dx/mag, dz/mag];
@@ -272,10 +278,9 @@ function shoot(type) {
     const fx = Math.cos(camYaw) * Math.cos(camPitch), fy = Math.sin(camPitch), fz = Math.sin(camYaw) * Math.cos(camPitch);
     const sx = Math.cos(camYaw + Math.PI/2), sz = Math.sin(camYaw + Math.PI/2);
     
-    // --- UPDATED OFFSETS ---
-    const handOffsetRight = 8.0;   // Side positioning to match hand
-    const handOffsetDown = -5.0;    // Height positioning
-    const handOffsetForward = 2.0;  // BROUGHT IN: Orb now spawns from the hand model
+    const handOffsetRight = 8.0;   
+    const handOffsetDown = -4.0; 
+    const handOffsetForward = 2.0;  
     
     const spawnPos = [
         camPos[0] + (sx * handOffsetRight) + (fx * handOffsetForward),
@@ -307,7 +312,34 @@ function handleJoy(e, el, knob, target) {
     target.y = (Math.sin(angle) * dist) / 40;
     knob.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
 }
-if(isMobile) { setupJoy('move-joy', joyMove); setupJoy('look-joy', joyLook); }
+
+// Camera Touch Zone Logic
+const camZone = document.getElementById('camera-touch-zone');
+camZone.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    lastTouchX = t.clientX;
+    lastTouchY = t.clientY;
+}, {passive: false});
+
+camZone.addEventListener('touchmove', e => {
+    if (lastTouchX === null) return;
+    const t = e.touches[0];
+    const dx = t.clientX - lastTouchX;
+    const dy = t.clientY - lastTouchY;
+    
+    camYaw += dx * 0.005;
+    camPitch = Math.max(-1.4, Math.min(1.4, camPitch - dy * 0.005));
+    
+    lastTouchX = t.clientX;
+    lastTouchY = t.clientY;
+}, {passive: false});
+
+camZone.addEventListener('touchend', () => {
+    lastTouchX = null;
+    lastTouchY = null;
+});
+
+if(isMobile) { setupJoy('move-joy', joyMove); }
 
 window.addEventListener('keydown', e => {
     keys[e.code] = true;
@@ -347,8 +379,6 @@ function render() {
         dashTime -= 0.016; if(dashTime <= 0) isDashing = false;
     } else {
         if(isMobile) {
-            camYaw += joyLook.x * 0.05;
-            camPitch = Math.max(-1.4, Math.min(1.4, camPitch - joyLook.y * 0.05));
             mx = (Math.cos(camYaw) * -joyMove.y + Math.cos(camYaw + Math.PI/2) * joyMove.x) * 1.5;
             mz = (Math.sin(camYaw) * -joyMove.y + Math.sin(camYaw + Math.PI/2) * joyMove.x) * 1.5;
         } else {
@@ -424,4 +454,5 @@ function render() {
 }
 requestAnimationFrame(render);
 </script>
-</body></html>
+</body>
+</html>

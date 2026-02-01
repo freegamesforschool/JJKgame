@@ -1,0 +1,428 @@
+<html lang="en"><head>
+    <meta charset="UTF-8">
+    <title>JJK WebGL</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; touch-action: none; }
+        canvas { display: block; position: fixed; inset: 0; }
+        #hand-container {
+            position: fixed; right: 10%; bottom: -10px; width: 140px; height: 220px;
+            pointer-events: none; z-index: 10; perspective: 1000px;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #hand {
+            position: absolute; bottom: 0; width: 100%; height: 100%;
+            background: linear-gradient(to top, #eac086, #ffdbac);
+            border-radius: 50px 50px 20px 20px; border: 3px solid #c68642;
+            box-shadow: inset -5px -5px 15px rgba(0,0,0,0.4);
+            transform: rotateX(20deg) rotateZ(-8deg);
+            transition: transform 0.1s ease-out;
+        }
+        .finger {
+            position: absolute; background: #ffdbac; border: 2px solid #c68642;
+            border-radius: 15px; width: 28px; height: 80px; top: -50px;
+        }
+        .f1 { left: 10px; height: 60px; top: -30px; }
+        .f2 { left: 45px; height: 85px; top: -55px; }
+        .f3 { left: 80px; height: 75px; top: -45px; }
+        .f4 { left: 110px; height: 60px; top: -25px; }
+
+        #hand-container.casting { right: 50%; bottom: 25%; transform: translateX(50%) scale(1.4) rotateZ(0deg) !important; }
+        .casting .f2 { transform: translateX(12px) translateY(8px) rotate(20deg); z-index: 2; }
+        .casting .f3 { transform: translateX(-12px) translateY(8px) rotate(-20deg); z-index: 1; }
+
+        #crosshair { position: fixed; top: 50%; left: 50%; width: 16px; height: 16px; transform: translate(-50%, -50%); pointer-events: none; z-index: 20; }
+        #crosshair:before, #crosshair:after { content: ''; position: absolute; background: lime; }
+        #crosshair:before { width: 2px; height: 100%; left: 7px; }
+        #crosshair:after { height: 2px; width: 100%; top: 7px; }
+
+        #hud { position: fixed; left: 20px; bottom: 20px; color: white; text-shadow: 2px 2px #000; z-index: 30; pointer-events: none; }
+        .bar-bg { width: 150px; height: 6px; background: rgba(0,0,0,0.7); border: 1px solid #444; margin-top: 5px; }
+        #cd-fill { width: 0%; height: 100%; background: #c040ff; }
+        #dash-fill { width: 0%; height: 100%; background: #4080ff; }
+
+        #mobile-ui { display: none; position: fixed; inset: 0; z-index: 100; pointer-events: none; }
+        .joystick-area { 
+            position: absolute; bottom: 30px; width: 120px; height: 120px; 
+            background: rgba(255,255,255,0.1); border-radius: 50%; border: 2px solid rgba(255,255,255,0.2);
+            pointer-events: auto; touch-action: none;
+        }
+        #move-joy { left: 30px; }
+        #look-joy { right: 30px; }
+        .knob { 
+            position: absolute; width: 50px; height: 50px; background: rgba(255,255,255,0.5); 
+            border-radius: 50%; left: 35px; top: 35px; pointer-events: none;
+        }
+        #mobile-btns { 
+            position: absolute; right: 20px; bottom: 160px; display: flex; flex-direction: column; 
+            gap: 10px; pointer-events: auto; 
+        }
+        #mobile-nav-btns {
+            position: absolute; left: 160px; bottom: 30px; display: flex; gap: 15px; pointer-events: auto;
+        }
+        .m-btn { 
+            width: 55px; height: 55px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.5); 
+            color: white; font-weight: bold; font-size: 9px; text-shadow: 1px 1px #000;
+        }
+        .nav-btn { width: 65px; height: 45px; border-radius: 10px; background: rgba(255,255,255,0.2); }
+    </style>
+</head>
+<body>
+
+<canvas id="glcanvas"></canvas>
+<div id="crosshair"></div>
+
+<div id="hud">
+    <div style="font-size: 18px; color: #7cf5ff; font-weight: bold;">SATORU GOJO</div>
+    <div class="bar-bg"><div id="cd-fill"></div></div>
+    <div style="font-size: 10px; margin-top: 5px; opacity: 0.7;">DASH CD</div>
+    <div class="bar-bg"><div id="dash-fill"></div></div>
+    <div style="margin-top:10px; font-size: 11px; opacity: 0.8;">F: RED | B: BLUE | L: PURPLE | R: DOMAIN | SHIFT: DASH</div>
+</div>
+
+<div id="mobile-ui">
+    <div id="move-joy" class="joystick-area"><div class="knob"></div></div>
+    <div id="look-joy" class="joystick-area"><div class="knob"></div></div>
+    <div id="mobile-nav-btns">
+        <button class="m-btn nav-btn" onclick="triggerDash()">DASH</button>
+        <button class="m-btn nav-btn" onclick="triggerJump()">JUMP</button>
+    </div>
+    <div id="mobile-btns">
+        <button class="m-btn" style="background: #000;" onclick="triggerDomain()">VOID</button>
+        <button class="m-btn" style="background: #a044ff;" onclick="shoot('purple')">PURPLE</button>
+        <button class="m-btn" style="background: #ff4444;" onclick="shoot('red')">RED</button>
+        <button class="m-btn" style="background: #4444ff;" onclick="shoot('blue')">BLUE</button>
+        <button class="m-btn" style="background: #7cf5ff; color:black;" onclick="shoot('punch')">PUNCH</button>
+    </div>
+</div>
+
+<div id="hand-container">
+    <div id="hand">
+        <div class="finger f1"></div><div class="finger f2"></div>
+        <div class="finger f3"></div><div class="finger f4"></div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+
+<script>
+const canvas = document.getElementById('glcanvas');
+const gl = canvas.getContext('webgl');
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+if(isMobile) document.getElementById('mobile-ui').style.display = 'block';
+
+const vsSource = `attribute vec3 position; attribute vec4 color; uniform mat4 uMVP; varying vec4 vC; void main(){ gl_Position = uMVP * vec4(position, 1.0); vC = color; gl_PointSize = 2.0; }`;
+const fsSource = `precision mediump float; varying vec4 vC; void main(){ gl_FragColor = vC; }`;
+
+function createShader(gl, type, source) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, source);
+    gl.compileShader(s);
+    return s;
+}
+
+const program = gl.createProgram();
+gl.attachShader(program, createShader(gl, gl.VERTEX_SHADER, vsSource));
+gl.attachShader(program, createShader(gl, gl.FRAGMENT_SHADER, fsSource));
+gl.linkProgram(program);
+gl.useProgram(program);
+
+const uMVP = gl.getUniformLocation(program, 'uMVP');
+const aP = gl.getAttribLocation(program, 'position'); 
+const aC = gl.getAttribLocation(program, 'color'); 
+gl.enableVertexAttribArray(aP); 
+gl.enableVertexAttribArray(aC);
+
+/** WORLD GEOMETRY **/
+const worldPos = [], worldCol = [], worldIdx = [];
+const hitboxes = []; 
+let off = 0;
+
+function addBox(x, y, z, w, h, d, c, isSolid = true) {
+    const hw=w/2, hh=h/2, hd=d/2;
+    worldPos.push(x-hw,y-hh,z+hd, x+hw,y-hh,z+hd, x+hw,y+hh,z+hd, x-hw,y+hh,z+hd, x-hw,y-hh,z-hd, x-hw,y+hh,z-hd, x+hw,y+hh,z-hd, x+hw,y-hh,z-hd, x-hw,y+hh,z-hd, x-hw,y+hh,z+hd, x+hw,y+hh,z+hd, x+hw,y+hh,z-hd, x-hw,y-hh,z-hd, x+hw,y-hh,z-hd, x+hw,y-hh,z+hd, x-hw,y-hh,z+hd);
+    for(let i=0; i<16; i++) worldCol.push(c[0], c[1], c[2], 1.0);
+    [0,1,2,0,2,3, 4,5,6,4,6,7, 8,9,10,8,10,11, 12,13,14,12,14,15].forEach(i => worldIdx.push(i+off));
+    off += 16;
+    if(isSolid) hitboxes.push({ minX: x - hw, maxX: x + hw, minY: y - hh, maxY: y + hh, minZ: z - hd, maxZ: z + hd });
+}
+
+addBox(0, -1, 0, 4000, 2, 4000, [0.15, 0.2, 0.25]); 
+addBox(0, 45, -250, 140, 90, 100, [0.3, 0.3, 0.35]); 
+addBox(0, 95, -250, 160, 10, 120, [0.2, 0.2, 0.25]); 
+
+const wPB = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, wPB); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(worldPos), gl.STATIC_DRAW);
+const wCB = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, wCB); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(worldCol), gl.STATIC_DRAW);
+const wIB = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wIB); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(worldIdx), gl.STATIC_DRAW);
+
+/** SPHERE & COSMIC GEOMETRY **/
+const spherePos = [], sphereIdx = [];
+const sphereCols = { red: [], blue: [], purple: [], white: [], black: [], horizon: [] };
+
+function initSpheres() {
+    const latBands = 20, longBands = 20;
+    for (let lat=0; lat <= latBands; lat++) {
+        let theta = lat * Math.PI / latBands;
+        let sinTheta = Math.sin(theta), cosTheta = Math.cos(theta);
+        for (let lon=0; lon <= longBands; lon++) {
+            let phi = lon * 2 * Math.PI / longBands;
+            let x = Math.cos(phi) * sinTheta, y = cosTheta, z = Math.sin(phi) * sinTheta;
+            spherePos.push(x, y, z);
+            sphereCols.red.push(1.0, 0.1, 0.1, 1.0);
+            sphereCols.blue.push(0.1, 0.4, 1.0, 1.0);
+            sphereCols.purple.push(0.8, 0.2, 1.0, 1.0);
+            sphereCols.white.push(1.0, 1.0, 1.0, 1.0);
+            sphereCols.black.push(0, 0, 0, 1);
+            sphereCols.horizon.push(0.8, 0.9, 1.0, 0.4);
+        }
+    }
+    for (let lat=0; lat < latBands; lat++) {
+        for (let lon=0; lon < longBands; lon++) {
+            let first = (lat * (longBands + 1)) + lon;
+            let second = first + longBands + 1;
+            sphereIdx.push(first, second, first + 1, second, second + 1, first + 1);
+        }
+    }
+}
+initSpheres();
+
+const starPos = [];
+const starCol = [];
+for(let i=0; i<3000; i++) {
+    const radius = 1800;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    starPos.push(radius * Math.sin(phi) * Math.cos(theta), radius * Math.sin(phi) * Math.sin(theta), radius * Math.cos(phi));
+    const bright = 0.6 + Math.random() * 0.4;
+    starCol.push(bright, bright, 1.0, 1.0);
+}
+
+const sPB = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, sPB); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(spherePos), gl.STATIC_DRAW);
+const sIB = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sIB); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(sphereIdx), gl.STATIC_DRAW);
+const starPB = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, starPB); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(starPos), gl.STATIC_DRAW);
+const starCB = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, starCB); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(starCol), gl.STATIC_DRAW);
+
+const getBuf = (d) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(d), gl.STATIC_DRAW); return b; };
+const sCB_R = getBuf(sphereCols.red), sCB_B = getBuf(sphereCols.blue), sCB_P = getBuf(sphereCols.purple), 
+      sCB_W = getBuf(sphereCols.white), sCB_Blk = getBuf(sphereCols.black), sCB_Hor = getBuf(sphereCols.horizon);
+
+/** STATE & INPUT **/
+let camPos = [0, 15, 500], camYaw = -Math.PI/2, camPitch = 0;
+let velY = 0, isGrounded = true, jumpCount = 0;
+let isDashing = false, dashTime = 0, lastDash = 0, dashDir = [0,0];
+let isCastingDomain = false, domainActive = false, domainScale = 0; 
+const keys = {}, projectiles = [];
+let lastFire = 0;
+const CD = 800;
+
+let joyMove = {x:0, y:0}, joyLook = {x:0, y:0};
+
+function checkCollision(nx, ny, nz) {
+    const r = 2; 
+    for(let box of hitboxes) {
+        if(nx+r > box.minX && nx-r < box.maxX && ny+r > box.minY && ny-r < box.maxY && nz+r > box.minZ && nz-r < box.maxZ) return true;
+    }
+    return false;
+}
+
+function triggerDomain() {
+    if (!domainActive && !isCastingDomain) {
+        isCastingDomain = true;
+        document.getElementById('hand-container').classList.add('casting');
+        setTimeout(() => { domainActive = true; domainScale = 0; }, 600);
+        setTimeout(() => { document.getElementById('hand-container').classList.remove('casting'); isCastingDomain = false; }, 1000);
+    } else if (domainActive) { domainActive = false; }
+}
+
+function triggerJump() {
+    if(isGrounded || jumpCount < 2) { velY = 2.2; isGrounded = false; jumpCount++; }
+}
+
+function triggerDash() {
+    if(Date.now() - lastDash > 500) { 
+        isDashing = true; dashTime = 0.15; lastDash = Date.now();
+        let dx = 0, dz = 0;
+        
+        let moveX = 0, moveZ = 0;
+        if(keys['KeyW']) { moveX += Math.cos(camYaw); moveZ += Math.sin(camYaw); }
+        if(keys['KeyS']) { moveX -= Math.cos(camYaw); moveZ -= Math.sin(camYaw); }
+        if(keys['KeyA']) { moveX -= Math.cos(camYaw+Math.PI/2); moveZ -= Math.sin(camYaw+Math.PI/2); }
+        if(keys['KeyD']) { moveX += Math.cos(camYaw+Math.PI/2); moveZ += Math.sin(camYaw+Math.PI/2); }
+        
+        if(isMobile && (joyMove.x !== 0 || joyMove.y !== 0)) {
+            moveX = Math.cos(camYaw)*-joyMove.y + Math.cos(camYaw+Math.PI/2)*joyMove.x;
+            moveZ = Math.sin(camYaw)*-joyMove.y + Math.sin(camYaw+Math.PI/2)*joyMove.x;
+        }
+
+        if(moveX === 0 && moveZ === 0) { 
+            dx = Math.cos(camYaw); dz = Math.sin(camYaw); 
+        } else {
+            dx = moveX; dz = moveZ;
+        }
+        
+        const mag = Math.sqrt(dx*dx + dz*dz);
+        dashDir = [dx/mag, dz/mag];
+    }
+}
+
+function shoot(type) {
+    const now = Date.now();
+    if(type !== 'punch' && now - lastFire < CD) return;
+    if(type !== 'punch') lastFire = now;
+    const speed = type === 'punch' ? 4 : 10; 
+    const fx = Math.cos(camYaw) * Math.cos(camPitch), fy = Math.sin(camPitch), fz = Math.sin(camYaw) * Math.cos(camPitch);
+    const sx = Math.cos(camYaw + Math.PI/2), sz = Math.sin(camYaw + Math.PI/2);
+    
+    // --- UPDATED OFFSETS ---
+    const handOffsetRight = 8.0;   // Side positioning to match hand
+    const handOffsetDown = -5.0;    // Height positioning
+    const handOffsetForward = 2.0;  // BROUGHT IN: Orb now spawns from the hand model
+    
+    const spawnPos = [
+        camPos[0] + (sx * handOffsetRight) + (fx * handOffsetForward),
+        camPos[1] + handOffsetDown + (fy * handOffsetForward),
+        camPos[2] + (sz * handOffsetRight) + (fz * handOffsetForward)
+    ];
+    projectiles.push({ type, pos: spawnPos, vel: [fx*speed, fy*speed, fz*speed], life: 200, scale: type === 'purple' ? 6 : 1.8 });
+    const hand = document.getElementById('hand');
+    hand.style.transform = 'rotateX(40deg) rotateZ(-8deg) translateY(10px)';
+    setTimeout(() => { hand.style.transform = 'rotateX(20deg) rotateZ(-8deg) translateY(0px)'; }, 100);
+}
+
+function setupJoy(id, target) {
+    const el = document.getElementById(id);
+    const knob = el.querySelector('.knob');
+    el.addEventListener('touchstart', e => handleJoy(e, el, knob, target), {passive: false});
+    el.addEventListener('touchmove', e => handleJoy(e, el, knob, target), {passive: false});
+    el.addEventListener('touchend', () => { target.x = 0; target.y = 0; knob.style.transform = `translate(0,0)`; });
+}
+function handleJoy(e, el, knob, target) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+    let dx = touch.clientX - cx, dy = touch.clientY - cy;
+    const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 40);
+    const angle = Math.atan2(dy, dx);
+    target.x = (Math.cos(angle) * dist) / 40;
+    target.y = (Math.sin(angle) * dist) / 40;
+    knob.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
+}
+if(isMobile) { setupJoy('move-joy', joyMove); setupJoy('look-joy', joyLook); }
+
+window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if(e.code === 'Space') triggerJump();
+    if(e.code === 'ShiftLeft') triggerDash();
+    if(e.code === 'KeyR') triggerDomain();
+    if(e.key.toLowerCase()==='f') shoot('red');
+    if(e.key.toLowerCase()==='b') shoot('blue');
+    if(e.key.toLowerCase()==='l') shoot('purple');
+});
+window.addEventListener('keyup', e => keys[e.code] = false);
+canvas.addEventListener('mousedown', e => { if(document.pointerLockElement === canvas) shoot('punch'); else canvas.requestPointerLock(); });
+window.addEventListener('mousemove', e => {
+    if (document.pointerLockElement === canvas) {
+        camYaw += e.movementX * 0.002;
+        camPitch = Math.max(-1.4, Math.min(1.4, camPitch - e.movementY * 0.002));
+    }
+});
+
+/** RENDER LOOP **/
+const projM = mat4.create(), viewM = mat4.create(), mvpM = mat4.create(), modelM = mat4.create();
+let phase = 0;
+
+function render() {
+    const w = window.innerWidth, h = window.innerHeight;
+    if(canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    gl.viewport(0, 0, w, h);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST);
+
+    velY -= 0.08;
+    let mx = 0, mz = 0;
+    
+    if(isDashing) {
+        mx = dashDir[0] * 6.0; mz = dashDir[1] * 6.0;
+        dashTime -= 0.016; if(dashTime <= 0) isDashing = false;
+    } else {
+        if(isMobile) {
+            camYaw += joyLook.x * 0.05;
+            camPitch = Math.max(-1.4, Math.min(1.4, camPitch - joyLook.y * 0.05));
+            mx = (Math.cos(camYaw) * -joyMove.y + Math.cos(camYaw + Math.PI/2) * joyMove.x) * 1.5;
+            mz = (Math.sin(camYaw) * -joyMove.y + Math.sin(camYaw + Math.PI/2) * joyMove.x) * 1.5;
+        } else {
+            if(keys['KeyW']) { mx += Math.cos(camYaw)*1.5; mz += Math.sin(camYaw)*1.5; }
+            if(keys['KeyS']) { mx -= Math.cos(camYaw)*1.5; mz -= Math.sin(camYaw)*1.5; }
+            if(keys['KeyA']) { mx -= Math.cos(camYaw+Math.PI/2)*1.5; mz -= Math.sin(camYaw+Math.PI/2)*1.5; }
+            if(keys['KeyD']) { mx += Math.cos(camYaw+Math.PI/2)*1.5; mz += Math.sin(camYaw+Math.PI/2)*1.5; }
+        }
+    }
+
+    if(!checkCollision(camPos[0] + mx, camPos[1], camPos[2])) camPos[0] += mx;
+    if(!checkCollision(camPos[0], camPos[1], camPos[2] + mz)) camPos[2] += mz;
+    
+    camPos[1] += velY;
+    if (camPos[1] <= 15) { camPos[1] = 15; velY = 0; isGrounded = true; jumpCount = 0; }
+    else if(checkCollision(camPos[0], camPos[1], camPos[2])) { camPos[1] -= velY; velY = 0; }
+
+    phase += 0.02;
+    if(!isCastingDomain) document.getElementById('hand-container').style.transform = `translateY(${Math.sin(phase*4)*8}px) rotateZ(-8deg)`;
+
+    mat4.perspective(projM, 45 * Math.PI / 180, w / h, 0.1, 5000.0);
+    mat4.lookAt(viewM, camPos, [camPos[0]+Math.cos(camYaw)*Math.cos(camPitch), camPos[1]+Math.sin(camPitch), camPos[2]+Math.sin(camYaw)*Math.cos(camPitch)], [0,1,0]);
+
+    if(!domainActive) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, wPB); gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, wCB); gl.vertexAttribPointer(aC, 4, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, wIB);
+        mat4.multiply(mvpM, projM, viewM);
+        gl.uniformMatrix4fv(uMVP, false, mvpM);
+        gl.drawElements(gl.TRIANGLES, worldIdx.length, gl.UNSIGNED_SHORT, 0);
+    } else {
+        if(domainScale < 1) domainScale += 0.04;
+        gl.bindBuffer(gl.ARRAY_BUFFER, starPB); gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, starCB); gl.vertexAttribPointer(aC, 4, gl.FLOAT, false, 0, 0);
+        mat4.identity(modelM); mat4.translate(modelM, modelM, camPos); mat4.rotateY(modelM, modelM, phase * 0.1);
+        mat4.multiply(mvpM, projM, mat4.multiply(mat4.create(), viewM, modelM));
+        gl.uniformMatrix4fv(uMVP, false, mvpM); gl.drawArrays(gl.POINTS, 0, 3000);
+        gl.bindBuffer(gl.ARRAY_BUFFER, sPB); gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sIB);
+        gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+        gl.bindBuffer(gl.ARRAY_BUFFER, sCB_Hor); gl.vertexAttribPointer(aC, 4, gl.FLOAT, false, 0, 0);
+        for(let i=0; i<4; i++) {
+            mat4.identity(modelM); mat4.translate(modelM, modelM, [0, 100, -650]);
+            let s = (110 + i*12) * domainScale; mat4.scale(modelM, modelM, [s, s, s]); mat4.rotateZ(modelM, modelM, phase * 2 + i);
+            mat4.multiply(mvpM, projM, mat4.multiply(mat4.create(), viewM, modelM));
+            gl.uniformMatrix4fv(uMVP, false, mvpM); gl.drawElements(gl.LINES, sphereIdx.length, gl.UNSIGNED_SHORT, 0);
+        }
+        gl.disable(gl.BLEND); gl.bindBuffer(gl.ARRAY_BUFFER, sCB_Blk); gl.vertexAttribPointer(aC, 4, gl.FLOAT, false, 0, 0);
+        mat4.identity(modelM); mat4.translate(modelM, modelM, [0, 100, -650]);
+        let coreS = 100 * domainScale; mat4.scale(modelM, modelM, [coreS, coreS, coreS]);
+        mat4.multiply(mvpM, projM, mat4.multiply(mat4.create(), viewM, modelM));
+        gl.uniformMatrix4fv(uMVP, false, mvpM); gl.drawElements(gl.TRIANGLES, sphereIdx.length, gl.UNSIGNED_SHORT, 0);
+    }
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, sPB); gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sIB);
+    for(let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i];
+        p.pos[0] += p.vel[0]; p.pos[1] += p.vel[1]; p.pos[2] += p.vel[2]; p.life--;
+        if (p.life <= 0 || checkCollision(p.pos[0], p.pos[1], p.pos[2])) { projectiles.splice(i, 1); continue; }
+        const coreCol = p.type==='red'?sCB_R : p.type==='blue'?sCB_B : p.type==='purple'?sCB_P : sCB_W;
+        gl.disable(gl.BLEND);
+        gl.bindBuffer(gl.ARRAY_BUFFER, coreCol); gl.vertexAttribPointer(aC, 4, gl.FLOAT, false, 0, 0);
+        mat4.identity(modelM); mat4.translate(modelM, modelM, p.pos);
+        mat4.scale(modelM, modelM, [p.scale, p.scale, p.scale]);
+        mat4.multiply(mvpM, projM, mat4.multiply(mat4.create(), viewM, modelM));
+        gl.uniformMatrix4fv(uMVP, false, mvpM); gl.drawElements(gl.TRIANGLES, sphereIdx.length, gl.UNSIGNED_SHORT, 0);
+    }
+
+    document.getElementById('cd-fill').style.width = Math.max(0, (1 - (Date.now() - lastFire)/CD)*100) + "%";
+    document.getElementById('dash-fill').style.width = Math.max(0, (1 - (Date.now() - lastDash)/500)*100) + "%";
+    requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+</script>
+</body></html>
+
